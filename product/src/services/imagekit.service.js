@@ -1,6 +1,7 @@
 
 const ImageKit = require('imagekit');
 const { v4: uuidv4 } = require("uuid")
+require('dotenv').config(); // ensure env vars loaded if service imported directly
 
 class ImageKitAuthError extends Error {
     constructor(message, help) {
@@ -11,17 +12,38 @@ class ImageKitAuthError extends Error {
     }
 }
 
+let imagekitInstance = null;
 
+function getImageKit() {
+    if (imagekitInstance) return imagekitInstance;
 
-const imagekit = new ImageKit({
-    publicKey: process.env.IMAGEKIT_PUBLIC_KEY || 'test_public',
-    privateKey: process.env.IMAGEKIT_PRIVATE_KEY || 'test_private',
-    urlEndpoint: process.env.IMAGEKIT_URL_ENDPOINT || 'https://ik.imagekit.io/demo',
-});
+    const { IMAGEKIT_PUBLIC_KEY, IMAGEKIT_PRIVATE_KEY, IMAGEKIT_URL_ENDPOINT } = process.env;
+
+    const missing = [];
+    if (!IMAGEKIT_PUBLIC_KEY) missing.push('IMAGEKIT_PUBLIC_KEY');
+    if (!IMAGEKIT_PRIVATE_KEY) missing.push('IMAGEKIT_PRIVATE_KEY');
+    if (!IMAGEKIT_URL_ENDPOINT) missing.push('IMAGEKIT_URL_ENDPOINT');
+
+    if (missing.length) {
+        const msg = `Missing ImageKit configuration: ${missing.join(', ')}`;
+        const help = 'Set the required env vars (IMAGEKIT_PUBLIC_KEY, IMAGEKIT_PRIVATE_KEY, IMAGEKIT_URL_ENDPOINT).';
+        const error = new ImageKitAuthError(msg, help);
+        error.code = 'IMAGEKIT_CONFIG_MISSING';
+        throw error;
+    }
+
+    imagekitInstance = new ImageKit({
+        publicKey: IMAGEKIT_PUBLIC_KEY,
+        privateKey: IMAGEKIT_PRIVATE_KEY,
+        urlEndpoint: IMAGEKIT_URL_ENDPOINT
+    });
+    return imagekitInstance;
+}
 
 async function uploadImage({ buffer, folder = '/products' }) {
     try {
-        const res = await imagekit.upload({
+        const ik = getImageKit();
+        const res = await ik.upload({
             file: buffer,
             fileName: uuidv4(),
             folder,
@@ -41,5 +63,5 @@ async function uploadImage({ buffer, folder = '/products' }) {
     }
 }
 
-module.exports = { imagekit, uploadImage, ImageKitAuthError };
+module.exports = { getImageKit, uploadImage, ImageKitAuthError };
     
